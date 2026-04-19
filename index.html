@@ -7,6 +7,7 @@
     </title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+
         body {
             margin: 0;
             padding: 0;
@@ -171,7 +172,7 @@
         const images = {};
         fishData.forEach(f => {
             const img = new Image();
-            iimg.src = `${f.id}.png`;
+            img.src = `${f.id}.png`;
             images[f.id] = img;
         });
 
