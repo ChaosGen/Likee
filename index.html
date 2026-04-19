@@ -3,11 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Рыбалка
-    </title>
+    <title>Рыбалка</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-
         body {
             margin: 0;
             padding: 0;
@@ -29,6 +27,7 @@
             background-size: 100% 100%;
             overflow: hidden;
             flex-shrink: 0;
+            transform-origin: center center;
         }
 
         canvas {
@@ -36,7 +35,6 @@
             background: transparent;
         }
 
-        /* Элементы управления внутри фиксированного поля */
         .cannon-node {
             position: absolute;
             width: 70px;
@@ -147,7 +145,6 @@
         let particles = [];
         let selectedCannon = 'bottom';
 
-        // Логика размеров и весов
         const fishData = [
             { id: 'fish1', val: 1, chance: 0.7, size: 60, spawnWeight: 100 },
             { id: 'fish2', val: 1, chance: 0.7, size: 55, spawnWeight: 100 },
@@ -172,11 +169,10 @@
         const images = {};
         fishData.forEach(f => {
             const img = new Image();
-            img.src = `${f.id}.png`;
+            img.src = `${f.id}.png`; 
             images[f.id] = img;
         });
 
-        // Функция адаптации под экран без изменения 704x1406
         function fitToScreen() {
             const windowWidth = window.innerWidth;
             const windowHeight = window.innerHeight;
@@ -217,8 +213,6 @@
             draw() {
                 ctx.save();
                 ctx.fillStyle = '#fbbf24';
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = '#fbbf24';
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
                 ctx.fill();
@@ -227,33 +221,24 @@
         }
 
         class Fish {
-            constructor() {
-                this.init();
-            }
+            constructor() { this.init(); }
             init() {
                 const totalWeight = fishData.reduce((sum, f) => sum + f.spawnWeight, 0);
                 let random = Math.random() * totalWeight;
                 for (const f of fishData) {
-                    if (random < f.spawnWeight) {
-                        this.type = f;
-                        break;
-                    }
+                    if (random < f.spawnWeight) { this.type = f; break; }
                     random -= f.spawnWeight;
                 }
-
                 this.size = this.type.size;
                 this.darken = 0;
-
                 const side = Math.floor(Math.random() * 4);
                 if (side === 0) { this.x = -this.size; this.y = Math.random() * GAME_HEIGHT; }
                 else if (side === 1) { this.x = GAME_WIDTH + this.size; this.y = Math.random() * GAME_HEIGHT; }
                 else if (side === 2) { this.x = Math.random() * GAME_WIDTH; this.y = -this.size; }
                 else { this.x = Math.random() * GAME_WIDTH; this.y = GAME_HEIGHT + this.size; }
-
                 const targetX = Math.random() * GAME_WIDTH;
                 const targetY = Math.random() * GAME_HEIGHT;
                 this.angle = Math.atan2(targetY - this.y, targetX - this.x);
-                
                 const baseSpeed = Math.random() * 1.5 + 1;
                 this.vx = Math.cos(this.angle) * baseSpeed;
                 this.vy = Math.sin(this.angle) * baseSpeed;
@@ -262,9 +247,7 @@
                 this.x += this.vx;
                 this.y += this.vy;
                 if(this.darken > 0) this.darken--;
-                if(this.x < -300 || this.x > GAME_WIDTH + 300 || this.y < -300 || this.y > GAME_HEIGHT + 300) {
-                    this.init();
-                }
+                if(this.x < -300 || this.x > GAME_WIDTH + 300 || this.y < -300 || this.y > GAME_HEIGHT + 300) this.init();
             }
             draw() {
                 const img = images[this.type.id];
@@ -283,18 +266,13 @@
         scaler.addEventListener('mousedown', (e) => {
             const rect = scaler.getBoundingClientRect();
             const scale = rect.width / GAME_WIDTH;
-            
-            // Координаты внутри системы 704x1406
             const mx = (e.clientX - rect.left) / scale;
             const my = (e.clientY - rect.top) / scale;
-            
             if (e.target.closest('.controls, .cannon-node')) return;
-
             const activeNode = document.getElementById(`cannon-${selectedCannon}`);
             const cRect = activeNode.getBoundingClientRect();
             const startX = (cRect.left - rect.left) / scale + (activeNode.offsetWidth / 2);
             const startY = (cRect.top - rect.top) / scale + (activeNode.offsetHeight / 2);
-
             bullets.push(new Bullet(startX, startY, mx, my));
         });
 
@@ -305,16 +283,8 @@
 
         function update() {
             ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-            
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-
-            // Пули
             for(let i = bullets.length - 1; i >= 0; i--) {
-                const b = bullets[i];
-                b.update();
-                b.draw();
-
+                const b = bullets[i]; b.update(); b.draw();
                 for(let j = 0; j < fishes.length; j++) {
                     const f = fishes[j];
                     const dist = Math.hypot(b.x - f.x, b.y - f.y);
@@ -326,36 +296,24 @@
                             scoreEl.innerText = score;
                             particles.push({ x: f.x, y: f.y, text: `+${reward}`, life: 60, big: f.type.val >= 30 });
                             f.init();
-                        } else {
-                            f.darken = 20;
-                        }
+                        } else { f.darken = 20; }
                         break;
                     }
                 }
                 if(!b.active) bullets.splice(i, 1);
             }
-
-            // Рыбы
-            fishes.forEach(f => {
-                f.update();
-                f.draw();
-            });
-
-            // Награды
+            fishes.forEach(f => { f.update(); f.draw(); });
             ctx.textAlign = 'center';
             for(let i = particles.length-1; i>=0; i--) {
                 const p = particles[i];
                 ctx.fillStyle = `rgba(251, 191, 36, ${p.life/60})`;
                 ctx.font = p.big ? 'bold 60px Arial' : 'bold 40px Arial';
                 ctx.fillText(p.text, p.x, p.y);
-                p.y -= 2;
-                p.life--;
+                p.y -= 2; p.life--;
                 if(p.life <= 0) particles.splice(i, 1);
             }
-
             requestAnimationFrame(update);
         }
-
         update();
     </script>
 </body>
