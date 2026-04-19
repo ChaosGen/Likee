@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Рыбалка
+    </title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* Контейнер строго 704x1406 */
+        #game-scaler {
+            position: relative;
+            width: 704px;
+            height: 1406px;
+            background-image: url('fon.png');
+            background-size: 100% 100%;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        canvas {
+            display: block;
+            background: transparent;
+        }
+
+        /* Элементы управления внутри фиксированного поля */
+        .cannon-node {
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            background: rgba(30, 41, 59, 0.85);
+            border: 3px solid #94a3b8;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 20;
+            transition: transform 0.2s;
+        }
+        .cannon-node.active {
+            border-color: #fbbf24;
+            box-shadow: 0 0 20px #fbbf24;
+            transform: scale(1.1);
+        }
+
+        #cannon-left { left: 10px; top: 50%; transform: translateY(-50%); }
+        #cannon-right { right: 10px; top: 50%; transform: translateY(-50%); }
+        #cannon-bottom { bottom: 30px; left: 50%; transform: translateX(-50%); }
+
+        .stat-panel {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 15px;
+            border: 2px solid #fbbf24;
+            color: #fbbf24;
+            font-size: 32px;
+            font-weight: bold;
+            z-index: 30;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 25px;
+            border-radius: 40px;
+            z-index: 30;
+        }
+
+        .btn {
+            width: 50px;
+            height: 50px;
+            background: #ef4444;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 30px;
+            font-weight: bold;
+        }
+        .btn-plus { background: #10b981; }
+        .gear-text { color: white; font-size: 24px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="game-scaler">
+        <div class="stat-panel">💎 <span id="score">0</span></div>
+
+        <div class="controls">
+            <div class="btn" onclick="event.stopPropagation(); changeLevel(-1)">−</div>
+            <div class="gear-text">СНАСТЬ: <span id="gear">1</span></div>
+            <div class="btn btn-plus" onclick="event.stopPropagation(); changeLevel(1)">+</div>
+        </div>
+
+        <div class="cannon-node" id="cannon-left" onclick="selectCannon('left', event)">
+            <span style="font-size: 30px;">⬅️</span>
+        </div>
+        <div class="cannon-node active" id="cannon-bottom" onclick="selectCannon('bottom', event)">
+            <span style="font-size: 30px;">⬆️</span>
+        </div>
+        <div class="cannon-node" id="cannon-right" onclick="selectCannon('right', event)">
+            <span style="font-size: 30px;">➡️</span>
+        </div>
+
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scaler = document.getElementById('game-scaler');
+        const scoreEl = document.getElementById('score');
+        const gearEl = document.getElementById('gear');
+
+        const GAME_WIDTH = 704;
+        const GAME_HEIGHT = 1406;
+
+        let score = 0;
+        let gearLevel = 1;
+        let fishes = [];
+        let bullets = [];
+        let particles = [];
+        let selectedCannon = 'bottom';
+
+        // Логика размеров и весов
+        const fishData = [
+            { id: 'fish1', val: 1, chance: 0.7, size: 60, spawnWeight: 100 },
+            { id: 'fish2', val: 1, chance: 0.7, size: 55, spawnWeight: 100 },
+            { id: 'fish3', val: 2, chance: 0.5, size: 85, spawnWeight: 80 },
+            { id: 'fish4', val: 2, chance: 0.5, size: 100, spawnWeight: 80 },
+            { id: 'fish5', val: 2, chance: 0.5, size: 85, spawnWeight: 80 },
+            { id: 'fish6', val: 3, chance: 0.4, size: 75, spawnWeight: 60 },
+            { id: 'fish7', val: 3, chance: 0.35, size: 100, spawnWeight: 60 },
+            { id: 'fish8', val: 4, chance: 0.3, size: 90, spawnWeight: 50 },
+            { id: 'fish9', val: 4, chance: 0.25, size: 130, spawnWeight: 40 },
+            { id: 'fish10', val: 5, chance: 0.2, size: 145, spawnWeight: 40 },
+            { id: 'fish11', val: 5, chance: 0.15, size: 170, spawnWeight: 30 },
+            { id: 'fish15', val: 5, chance: 0.2, size: 155, spawnWeight: 35 },
+            { id: 'fish12', val: 8, chance: 0.1, size: 85, gold: true, spawnWeight: 15 },
+            { id: 'fish13', val: 10, chance: 0.08, size: 110, gold: true, spawnWeight: 12 },
+            { id: 'fish16', val: 12, chance: 0.05, size: 210, spawnWeight: 8 },
+            { id: 'fish14', val: 12, chance: 0.05, size: 190, gold: true, spawnWeight: 10 },
+            { id: 'fish17', val: 30, chance: 0.02, size: 250, spawnWeight: 3 }, 
+            { id: 'fish18', val: 40, chance: 0.01, size: 280, spawnWeight: 1 }
+        ];
+
+        const images = {};
+        fishData.forEach(f => {
+            const img = new Image();
+            img.src = `foto/${f.id}.png`;
+            images[f.id] = img;
+        });
+
+        // Функция адаптации под экран без изменения 704x1406
+        function fitToScreen() {
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            const scale = Math.min(windowWidth / GAME_WIDTH, windowHeight / GAME_HEIGHT);
+            scaler.style.transform = `scale(${scale})`;
+        }
+
+        window.addEventListener('resize', fitToScreen);
+        fitToScreen();
+
+        canvas.width = GAME_WIDTH;
+        canvas.height = GAME_HEIGHT;
+
+        function selectCannon(id, e) {
+            e.stopPropagation();
+            document.querySelectorAll('.cannon-node').forEach(el => el.classList.remove('active'));
+            document.getElementById(`cannon-${id}`).classList.add('active');
+            selectedCannon = id;
+        }
+
+        class Bullet {
+            constructor(startX, startY, targetX, targetY) {
+                this.x = startX;
+                this.y = startY;
+                const angle = Math.atan2(targetY - startY, targetX - startX);
+                this.vx = Math.cos(angle) * 16;
+                this.vy = Math.sin(angle) * 16;
+                this.radius = 12;
+                this.active = true;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                if(this.x < -20 || this.x > GAME_WIDTH + 20 || this.y < -20 || this.y > GAME_HEIGHT + 20) {
+                    this.active = false;
+                }
+            }
+            draw() {
+                ctx.save();
+                ctx.fillStyle = '#fbbf24';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#fbbf24';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        class Fish {
+            constructor() {
+                this.init();
+            }
+            init() {
+                const totalWeight = fishData.reduce((sum, f) => sum + f.spawnWeight, 0);
+                let random = Math.random() * totalWeight;
+                for (const f of fishData) {
+                    if (random < f.spawnWeight) {
+                        this.type = f;
+                        break;
+                    }
+                    random -= f.spawnWeight;
+                }
+
+                this.size = this.type.size;
+                this.darken = 0;
+
+                const side = Math.floor(Math.random() * 4);
+                if (side === 0) { this.x = -this.size; this.y = Math.random() * GAME_HEIGHT; }
+                else if (side === 1) { this.x = GAME_WIDTH + this.size; this.y = Math.random() * GAME_HEIGHT; }
+                else if (side === 2) { this.x = Math.random() * GAME_WIDTH; this.y = -this.size; }
+                else { this.x = Math.random() * GAME_WIDTH; this.y = GAME_HEIGHT + this.size; }
+
+                const targetX = Math.random() * GAME_WIDTH;
+                const targetY = Math.random() * GAME_HEIGHT;
+                this.angle = Math.atan2(targetY - this.y, targetX - this.x);
+                
+                const baseSpeed = Math.random() * 1.5 + 1;
+                this.vx = Math.cos(this.angle) * baseSpeed;
+                this.vy = Math.sin(this.angle) * baseSpeed;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                if(this.darken > 0) this.darken--;
+                if(this.x < -300 || this.x > GAME_WIDTH + 300 || this.y < -300 || this.y > GAME_HEIGHT + 300) {
+                    this.init();
+                }
+            }
+            draw() {
+                const img = images[this.type.id];
+                if(!img || !img.complete) return;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle + Math.PI); 
+                if(this.darken > 0) ctx.filter = 'brightness(30%) contrast(120%)';
+                ctx.drawImage(img, -this.size/2, -this.size/2, this.size, this.size);
+                ctx.restore();
+            }
+        }
+
+        for(let i=0; i < 15; i++) fishes.push(new Fish());
+
+        scaler.addEventListener('mousedown', (e) => {
+            const rect = scaler.getBoundingClientRect();
+            const scale = rect.width / GAME_WIDTH;
+            
+            // Координаты внутри системы 704x1406
+            const mx = (e.clientX - rect.left) / scale;
+            const my = (e.clientY - rect.top) / scale;
+            
+            if (e.target.closest('.controls, .cannon-node')) return;
+
+            const activeNode = document.getElementById(`cannon-${selectedCannon}`);
+            const cRect = activeNode.getBoundingClientRect();
+            const startX = (cRect.left - rect.left) / scale + (activeNode.offsetWidth / 2);
+            const startY = (cRect.top - rect.top) / scale + (activeNode.offsetHeight / 2);
+
+            bullets.push(new Bullet(startX, startY, mx, my));
+        });
+
+        function changeLevel(d) {
+            gearLevel = Math.max(1, Math.min(100, gearLevel + d));
+            gearEl.innerText = gearLevel;
+        }
+
+        function update() {
+            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+            
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+
+            // Пули
+            for(let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                b.update();
+                b.draw();
+
+                for(let j = 0; j < fishes.length; j++) {
+                    const f = fishes[j];
+                    const dist = Math.hypot(b.x - f.x, b.y - f.y);
+                    if(dist < f.size * 0.4) {
+                        b.active = false;
+                        if(Math.random() < f.type.chance) {
+                            const reward = f.type.val * gearLevel;
+                            score += reward;
+                            scoreEl.innerText = score;
+                            particles.push({ x: f.x, y: f.y, text: `+${reward}`, life: 60, big: f.type.val >= 30 });
+                            f.init();
+                        } else {
+                            f.darken = 20;
+                        }
+                        break;
+                    }
+                }
+                if(!b.active) bullets.splice(i, 1);
+            }
+
+            // Рыбы
+            fishes.forEach(f => {
+                f.update();
+                f.draw();
+            });
+
+            // Награды
+            ctx.textAlign = 'center';
+            for(let i = particles.length-1; i>=0; i--) {
+                const p = particles[i];
+                ctx.fillStyle = `rgba(251, 191, 36, ${p.life/60})`;
+                ctx.font = p.big ? 'bold 60px Arial' : 'bold 40px Arial';
+                ctx.fillText(p.text, p.x, p.y);
+                p.y -= 2;
+                p.life--;
+                if(p.life <= 0) particles.splice(i, 1);
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        update();
+    </script>
+</body>
+</html>
